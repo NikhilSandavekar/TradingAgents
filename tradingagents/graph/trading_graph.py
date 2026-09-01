@@ -271,7 +271,10 @@ class TradingAgentsGraph:
         return benchmark_map.get("", "SPY")
 
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5,
+        self,
+        ticker: str,
+        trade_date: str,
+        holding_days: int = 5,
         benchmark: str = "SPY",
     ) -> tuple[float | None, float | None, int | None, str | None]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
@@ -319,7 +322,10 @@ class TradingAgentsGraph:
         except Exception as e:
             logger.warning(
                 "Could not resolve outcome for %s on %s vs %s (will retry next run): %s",
-                ticker, trade_date, benchmark, e,
+                ticker,
+                trade_date,
+                benchmark,
+                e,
             )
             return None, None, None, None
 
@@ -338,10 +344,17 @@ class TradingAgentsGraph:
             return
 
         benchmark = self._resolve_benchmark(ticker)
+        config = getattr(self, "config", {}) or {}
+        holding_days = int(config.get("evaluation_horizon_days", 5))
+        if holding_days < 1:
+            raise ValueError("evaluation_horizon_days must be at least 1.")
         updates = []
         for entry in pending:
             raw, alpha, days, resolution_date = self._fetch_returns(
-                ticker, entry["date"], benchmark=benchmark,
+                ticker,
+                entry["date"],
+                holding_days=holding_days,
+                benchmark=benchmark,
             )
             if raw is None:
                 continue  # price not available yet — try again next run
@@ -351,15 +364,17 @@ class TradingAgentsGraph:
                 alpha_return=alpha,
                 benchmark_name=benchmark,
             )
-            updates.append({
-                "ticker": ticker,
-                "trade_date": entry["date"],
-                "raw_return": raw,
-                "alpha_return": alpha,
-                "holding_days": days,
-                "reflection": reflection,
-                "resolution_date": resolution_date,
-            })
+            updates.append(
+                {
+                    "ticker": ticker,
+                    "trade_date": entry["date"],
+                    "raw_return": raw,
+                    "alpha_return": alpha,
+                    "holding_days": days,
+                    "reflection": reflection,
+                    "resolution_date": resolution_date,
+                }
+            )
 
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
@@ -394,12 +409,23 @@ class TradingAgentsGraph:
         selection, debate/risk depth, or asset mode starts fresh instead of
         silently continuing the previous graph (#1089).
         """
-        return "|".join([
+        signature = [
             "analysts=" + ",".join(self.selected_analysts),
             f"debate={self.config['max_debate_rounds']}",
             f"risk={self.config['max_risk_discuss_rounds']}",
             f"asset={asset_type}",
-        ])
+            f"strategy={self.config.get('strategy_mode', 'general')}",
+        ]
+        if str(self.config.get("strategy_mode", "general")).lower() == "swing":
+            signature.extend(
+                [
+                    f"horizon={self.config.get('swing_min_hold_days', 2)}-"
+                    f"{self.config.get('swing_max_hold_days', 15)}",
+                    f"rr={self.config.get('min_reward_risk', 2.0)}",
+                    f"riskpct={self.config.get('max_account_risk_pct', 0.5)}",
+                ]
+            )
+        return "|".join(signature)
 
     def propagate(self, company_name, trade_date, asset_type: str = "stock"):
         """Run the trading agents graph for a company on a specific date.
@@ -424,7 +450,9 @@ class TradingAgentsGraph:
 
         with self.checkpoint_scope(company_name, trade_date, asset_type) as thread_id_value:
             return self._run_graph(
-                company_name, trade_date, asset_type=asset_type,
+                company_name,
+                trade_date,
+                asset_type=asset_type,
                 checkpoint_thread_id=thread_id_value,
             )
 
@@ -487,7 +515,9 @@ class TradingAgentsGraph:
         """Drop a completed run's checkpoint so a later run starts fresh (#1249)."""
         if self.config.get("checkpoint_enabled"):
             clear_checkpoint(
-                self.config["data_cache_dir"], company_name, str(trade_date),
+                self.config["data_cache_dir"],
+                company_name,
+                str(trade_date),
                 self._run_signature(asset_type),
             )
 
@@ -506,8 +536,13 @@ class TradingAgentsGraph:
             )
         return write_report_tree(final_state, ticker, save_path)
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock",
-                   checkpoint_thread_id: str | None = None):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        checkpoint_thread_id: str | None = None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents. On a
@@ -529,7 +564,9 @@ class TradingAgentsGraph:
         # Inject the checkpoint thread_id (from checkpoint_scope) so the same
         # ticker+date+graph-shape resumes; a different one starts fresh (#1089).
         if checkpoint_thread_id is not None:
-            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = checkpoint_thread_id
+            args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = (
+                checkpoint_thread_id
+            )
 
         # None resumes an existing checkpoint; init_agent_state starts fresh (#1249).
         graph_input = self.checkpoint_input(init_agent_state)
@@ -586,12 +623,8 @@ class TradingAgentsGraph:
                 "bull_history": final_state["investment_debate_state"]["bull_history"],
                 "bear_history": final_state["investment_debate_state"]["bear_history"],
                 "history": final_state["investment_debate_state"]["history"],
-                "current_response": final_state["investment_debate_state"][
-                    "current_response"
-                ],
-                "judge_decision": final_state["investment_debate_state"][
-                    "judge_decision"
-                ],
+                "current_response": final_state["investment_debate_state"]["current_response"],
+                "judge_decision": final_state["investment_debate_state"]["judge_decision"],
             },
             "trader_investment_decision": final_state["trader_investment_plan"],
             "risk_debate_state": {

@@ -47,6 +47,7 @@ bedrock = [
 
 [project.scripts]
 tradingagents = "cli.main:app"
+tradingagents-swing = "cli.swing:main"
 
 [tool.setuptools.packages.find]
 include = ["tradingagents*", "cli*"]

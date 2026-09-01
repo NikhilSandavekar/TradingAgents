@@ -36,12 +36,14 @@ def test_string_overrides(monkeypatch):
         TRADINGAGENTS_QUICK_THINK_LLM="gemini-3-flash-preview",
         TRADINGAGENTS_LLM_BACKEND_URL="https://example.invalid/v1",
         TRADINGAGENTS_OUTPUT_LANGUAGE="Chinese",
+        TRADINGAGENTS_STRATEGY_MODE="swing",
     )
     assert dc.DEFAULT_CONFIG["llm_provider"] == "google"
     assert dc.DEFAULT_CONFIG["deep_think_llm"] == "gemini-3-pro-preview"
     assert dc.DEFAULT_CONFIG["quick_think_llm"] == "gemini-3-flash-preview"
     assert dc.DEFAULT_CONFIG["backend_url"] == "https://example.invalid/v1"
     assert dc.DEFAULT_CONFIG["output_language"] == "Chinese"
+    assert dc.DEFAULT_CONFIG["strategy_mode"] == "swing"
 
 
 def test_int_coercion(monkeypatch):
@@ -49,18 +51,43 @@ def test_int_coercion(monkeypatch):
         monkeypatch,
         TRADINGAGENTS_MAX_DEBATE_ROUNDS="3",
         TRADINGAGENTS_MAX_RISK_ROUNDS="2",
+        TRADINGAGENTS_SWING_MIN_HOLD_DAYS="3",
+        TRADINGAGENTS_SWING_MAX_HOLD_DAYS="12",
+        TRADINGAGENTS_EVALUATION_HORIZON_DAYS="8",
     )
     assert dc.DEFAULT_CONFIG["max_debate_rounds"] == 3
     assert isinstance(dc.DEFAULT_CONFIG["max_debate_rounds"], int)
     assert dc.DEFAULT_CONFIG["max_risk_discuss_rounds"] == 2
     assert isinstance(dc.DEFAULT_CONFIG["max_risk_discuss_rounds"], int)
+    assert dc.DEFAULT_CONFIG["swing_min_hold_days"] == 3
+    assert dc.DEFAULT_CONFIG["swing_max_hold_days"] == 12
+    assert dc.DEFAULT_CONFIG["evaluation_horizon_days"] == 8
+
+
+def test_swing_float_coercion(monkeypatch):
+    dc = _reload_with_env(
+        monkeypatch,
+        TRADINGAGENTS_MIN_REWARD_RISK="2.5",
+        TRADINGAGENTS_MAX_ACCOUNT_RISK_PCT="0.75",
+    )
+    assert dc.DEFAULT_CONFIG["min_reward_risk"] == 2.5
+    assert dc.DEFAULT_CONFIG["max_account_risk_pct"] == 0.75
+    assert isinstance(dc.DEFAULT_CONFIG["min_reward_risk"], float)
 
 
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("true", True), ("True", True), ("1", True), ("yes", True), ("on", True),
-        ("false", False), ("False", False), ("0", False), ("no", False), ("off", False),
+        ("true", True),
+        ("True", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+        ("false", False),
+        ("False", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
     ],
 )
 def test_bool_coercion(monkeypatch, raw, expected):

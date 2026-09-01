@@ -106,13 +106,15 @@ class ResearchPlan(BaseModel):
 
 def render_research_plan(plan: ResearchPlan) -> str:
     """Render a ResearchPlan to markdown for storage and the trader's prompt context."""
-    return "\n".join([
-        f"**Recommendation**: {plan.recommendation.value}",
-        "",
-        f"**Rationale**: {plan.rationale}",
-        "",
-        f"**Strategic Actions**: {plan.strategic_actions}",
-    ])
+    return "\n".join(
+        [
+            f"**Recommendation**: {plan.recommendation.value}",
+            "",
+            f"**Rationale**: {plan.rationale}",
+            "",
+            f"**Strategic Actions**: {plan.strategic_actions}",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -146,12 +148,24 @@ class TraderProposal(BaseModel):
         default=None,
         description="Optional stop-loss price in the instrument's quote currency.",
     )
+    target_price: float | None = Field(
+        default=None,
+        description="Optional profit target in the instrument's quote currency.",
+    )
+    reward_risk_ratio: float | None = Field(
+        default=None,
+        description="Optional expected reward divided by planned risk for the setup.",
+    )
+    time_horizon: str | None = Field(
+        default=None,
+        description="Optional expected holding period or time-based exit.",
+    )
     position_sizing: str | None = Field(
         default=None,
         description="Optional sizing guidance, e.g. '5% of portfolio'.",
     )
 
-    @field_validator("entry_price", "stop_loss", mode="before")
+    @field_validator("entry_price", "stop_loss", "target_price", "reward_risk_ratio", mode="before")
     @classmethod
     def _nullish_float_to_none(cls, v):
         return _coerce_optional_float(v)
@@ -173,12 +187,20 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", f"**Entry Price**: {proposal.entry_price}"])
     if proposal.stop_loss is not None:
         parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
+    if proposal.target_price is not None:
+        parts.extend(["", f"**Target Price**: {proposal.target_price}"])
+    if proposal.reward_risk_ratio is not None:
+        parts.extend(["", f"**Reward/Risk**: {proposal.reward_risk_ratio:g}:1"])
+    if proposal.time_horizon:
+        parts.extend(["", f"**Time Horizon**: {proposal.time_horizon}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
-    parts.extend([
-        "",
-        f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
-    ])
+    parts.extend(
+        [
+            "",
+            f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
+        ]
+    )
     return "\n".join(parts)
 
 
@@ -337,10 +359,12 @@ def render_sentiment_report(report: SentimentReport) -> str:
     narrative so the saved report is both human-readable and machine-parseable
     without regex.
     """
-    return "\n".join([
-        f"**Overall Sentiment:** **{report.overall_band.value}** "
-        f"(Score: {report.overall_score:.1f}/10)",
-        f"**Confidence:** {report.confidence.capitalize()}",
-        "",
-        report.narrative,
-    ])
+    return "\n".join(
+        [
+            f"**Overall Sentiment:** **{report.overall_band.value}** "
+            f"(Score: {report.overall_score:.1f}/10)",
+            f"**Confidence:** {report.confidence.capitalize()}",
+            "",
+            report.narrative,
+        ]
+    )

@@ -43,6 +43,7 @@ __all__ = [
     "resolve_instrument_identity",
     "get_instrument_context_from_state",
     "get_language_instruction",
+    "get_strategy_instruction",
     "create_msg_delete",
 ]
 
@@ -59,10 +60,54 @@ def get_language_instruction() -> str:
     report rather than a mix of languages.
     """
     from tradingagents.dataflows.config import get_config
+
     lang = get_config().get("output_language", "English")
     if lang.strip().lower() == "english":
         return ""
     return f" Write your entire response in {lang}."
+
+
+def get_strategy_instruction() -> str:
+    """Return an opt-in strategy mandate shared by every agent.
+
+    Keeping this instruction in the instrument context makes the mandate reach
+    analysts, researchers, risk debaters, the Trader, and the Portfolio Manager
+    without duplicating prompt text across every node.
+    """
+    from tradingagents.dataflows.config import get_config
+
+    config = get_config()
+    mode = str(config.get("strategy_mode", "general")).strip().lower()
+    if mode in {"", "general"}:
+        return ""
+    if mode != "swing":
+        raise ValueError(f"Unsupported strategy_mode {mode!r}; expected 'general' or 'swing'.")
+
+    min_days = int(config.get("swing_min_hold_days", 2))
+    max_days = int(config.get("swing_max_hold_days", 15))
+    min_reward_risk = float(config.get("min_reward_risk", 2.0))
+    max_risk_pct = float(config.get("max_account_risk_pct", 0.5))
+    if min_days < 1 or max_days < min_days:
+        raise ValueError(
+            "Swing holding period must satisfy 1 <= swing_min_hold_days <= swing_max_hold_days."
+        )
+    if min_reward_risk <= 0:
+        raise ValueError("min_reward_risk must be greater than zero.")
+    if not 0 < max_risk_pct <= 100:
+        raise ValueError("max_account_risk_pct must be greater than 0 and at most 100.")
+
+    return (
+        "Swing-trading mandate: evaluate this as a "
+        f"{min_days}-{max_days} trading-day opportunity. Favor daily price structure, "
+        "trend, momentum, volume, ATR, and near-term catalysts over long-term narrative. "
+        "For an actionable Buy or Sell, provide a trigger-based entry, stop-loss, profit "
+        f"target, invalidation condition, and time exit with reward-to-risk of at least "
+        f"{min_reward_risk:g}:1. Cap planned loss at {max_risk_pct:g}% of account equity; "
+        "when account equity is unknown, give the sizing formula rather than inventing a "
+        "share count. Use Hold when verified data does not support a complete setup or "
+        "the minimum reward-to-risk threshold. Treat gap/event risk inside the holding "
+        "window explicitly."
+    )
 
 
 def opponent_argument_or_opening(text: str, opponent: str) -> str:
@@ -193,12 +238,13 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     consumer is never forced to make a yfinance call mid-graph.
     """
     context = state.get("instrument_context")
-    if isinstance(context, str) and context.strip():
-        return context
-    return build_instrument_context(
-        str(state["company_of_interest"]),
-        state.get("asset_type", "stock"),
-    )
+    if not isinstance(context, str) or not context.strip():
+        context = build_instrument_context(
+            str(state["company_of_interest"]),
+            state.get("asset_type", "stock"),
+        )
+    strategy = get_strategy_instruction()
+    return f"{context}\n{strategy}" if strategy else context
 
 
 def create_msg_delete():
@@ -226,6 +272,3 @@ def create_msg_delete():
         return {"messages": removal_operations + [placeholder]}
 
     return delete_messages
-
-
-

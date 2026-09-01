@@ -186,6 +186,34 @@ TradingAgents works with any market Yahoo Finance covers, using the exchange-suf
 
 An interface will appear showing results as they load, letting you track the agent's progress as it runs.
 
+### Swing-trading profile
+
+This fork includes an opt-in swing-trading profile. It applies a bounded holding
+horizon and requires actionable setups to include a trigger-based entry,
+stop-loss, profit target, time exit, minimum reward/risk, and risk-based sizing.
+The standard `tradingagents` command remains unchanged.
+
+After installation, run:
+
+```bash
+tradingagents-swing RELIANCE.NS
+```
+
+Customize the mandate from the command line:
+
+```bash
+tradingagents-swing RELIANCE.NS \
+  --min-hold-days 2 \
+  --max-hold-days 15 \
+  --min-reward-risk 2 \
+  --max-account-risk-pct 0.5
+```
+
+The maximum account-risk percentage is a loss budget, not a position-size
+percentage. When account equity is not supplied, the agents must provide a
+sizing formula instead of inventing a share count. This remains a research and
+decision-support workflow; it does not submit live broker orders.
+
 <p align="center">
   <img src="assets/cli/cli_news.png" width="100%" style="display: inline-block; margin: 0 2%;">
 </p>
